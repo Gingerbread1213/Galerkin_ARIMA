@@ -1,0 +1,35 @@
+BEST PARAMETERS ANALYSIS SUMMARY
+============================================================
+
+Dataset Comparison:
+------------------------------
+
+GDP Dataset:
+  ARIMA           : (1,1,0,0)
+  Galerkin-SARIMA : (0,5,0,1)
+
+SP500 Dataset:
+  ARIMA           : (0,1,0,0)
+  Galerkin-SARIMA : (0,1,0,0)
+
+============================================================
+PARAMETER EXPLANATION:
+------------------------------
+p, q: ARIMA order parameters (autoregressive, moving average)
+P, Q: Seasonal order parameters
+Format: (p, q, P, Q)
+
+PERFORMANCE INSIGHTS:
+------------------------------
+• GDP: Galerkin-SARIMA shows more complex seasonality (Q=1)
+• SP500: Both models use simple parameters, suggesting less seasonality
+• ARIMA models tend to be more conservative
+• Galerkin-SARIMA models can capture more complex patterns
+
+DETAILED RESULTS TABLE:
+------------------------------
+Dataset       Algorithm  p  q  P  Q Parameters
+    GDP           ARIMA  1  1  0  0  (1,1,0,0)
+    GDP Galerkin-SARIMA  0  5  0  1  (0,5,0,1)
+  SP500           ARIMA  0  1  0  0  (0,1,0,0)
+  SP500 Galerkin-SARIMA  0  1  0  0  (0,1,0,0)
