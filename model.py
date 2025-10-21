@@ -522,8 +522,8 @@ class TDRLSGalerkinSARIMA:
     """
     def __init__(self, endog=None, order=(0, 0, 0), seasonal_order=(0, 0, 0, 1),
                  basis_functions=None, rho=0.98, lambda_beta=1e-3, lambda_alpha=1e-3,
-                 standardize=True, use_ridge=False, ridge_lambda_ar=1.0, ridge_lambda_ma=1.0,
-                 ridge_weight_scheme='none', ridge_eta=1.0, ridge_weights_vector=None):
+                 standardize=True, use_ridge=False, ridge_weight_scheme='none',
+                 ridge_eta=1.0, ridge_weights_vector=None, ridge_weights_vector_ma=None):
         # Orders
         self.order = order
         self.seasonal_order = seasonal_order
@@ -558,13 +558,12 @@ class TDRLSGalerkinSARIMA:
         self.lambda_alpha = float(lambda_alpha)
         self.standardize = bool(standardize)
         
-        # Ridge regression parameters
+        # Ridge regression parameters (per-basis weighted ridge)
         self.use_ridge = bool(use_ridge)
-        self.ridge_lambda_ar = float(ridge_lambda_ar)
-        self.ridge_lambda_ma = float(ridge_lambda_ma)
         self.ridge_weight_scheme = ridge_weight_scheme
         self.ridge_eta = float(ridge_eta)
         self.ridge_weights_vector = ridge_weights_vector
+        self.ridge_weights_vector_ma = ridge_weights_vector_ma
         
         # Model state
         self.endog = None
@@ -642,33 +641,43 @@ class TDRLSGalerkinSARIMA:
             return psi
         return (psi - self._mu_psi) / (self._sigma_psi + 1e-12)
 
-    # ---------- Build ridge weights ----------
-    def _build_ridge_weights(self, n_features, stage='ar'):
+    # ---------- Ridge weight builder ----------
+    def _build_ridge_weights_auto(self, n_features, stage='ar'):
         """
-        Build per-feature ridge weights for TD model.
+        Build per-basis ridge weights for TD model.
         stage: 'ar' or 'ma'
         """
+        if self.ridge_weight_scheme == 'custom':
+            if stage == 'ar':
+                if self.ridge_weights_vector is not None:
+                    w = np.asarray(self.ridge_weights_vector, dtype=float)
+                    if w.shape[0] != n_features:
+                        raise ValueError(f"ridge_weights_vector length {w.shape[0]} != n_features {n_features}")
+                    return w
+                else:
+                    # Fallback to uniform if custom requested but not provided
+                    return np.ones(n_features, dtype=float)
+            else:  # MA stage
+                if self.ridge_weights_vector_ma is not None:
+                    w = np.asarray(self.ridge_weights_vector_ma, dtype=float)
+                    if w.shape[0] != n_features:
+                        raise ValueError(f"ridge_weights_vector_ma length {w.shape[0]} != n_features {n_features}")
+                    return w
+                else:
+                    # Fallback to uniform for MA if not provided
+                    return np.ones(n_features, dtype=float)
+        
+        # Auto schemes
         if self.ridge_weight_scheme == 'none':
             return np.ones(n_features, dtype=float)
         elif self.ridge_weight_scheme == 'poly':
-            # Polynomial decay: w_i = i^eta
-            return np.array([float(i + 1) ** self.ridge_eta for i in range(n_features)], dtype=float)
+            # Polynomial decay: w_i = (i+1)^eta
+            return np.array([(i+1)**self.ridge_eta for i in range(n_features)], dtype=float)
         elif self.ridge_weight_scheme == 'exp':
             # Exponential decay: w_i = exp(eta * i)
-            return np.array([np.exp(self.ridge_eta * float(i)) for i in range(n_features)], dtype=float)
-        elif self.ridge_weight_scheme == 'custom':
-            if self.ridge_weights_vector is not None:
-                w = np.asarray(self.ridge_weights_vector, dtype=float)
-                if w.shape[0] == n_features:
-                    return w
-                else:
-                    raise ValueError(f"ridge_weights_vector length {w.shape[0]} != n_features {n_features}")
-            else:
-                # If custom but no vector provided, fall back to uniform
-                return np.ones(n_features, dtype=float)
+            return np.array([np.exp(self.ridge_eta * i) for i in range(n_features)], dtype=float)
         else:
-            # Unknown scheme, default to uniform
-            return np.ones(n_features, dtype=float)
+            raise ValueError(f"Unknown ridge_weight_scheme: {self.ridge_weight_scheme}")
 
     # ---------- Ensure shapes and initialize RLS state ----------
     def _ensure_shapes(self, y, t):
@@ -677,13 +686,34 @@ class TDRLSGalerkinSARIMA:
         if self.beta is None:
             d_phi = phi.size
             self.beta = np.zeros(d_phi)
-            self.P_beta = (1.0 / self.lambda_beta) * np.eye(d_phi)
+            
+            # Initialize P_beta with per-basis weighted ridge if use_ridge=True
+            if self.use_ridge:
+                w_beta = self._build_ridge_weights_auto(d_phi, 'ar')
+                W_beta = np.diag(w_beta ** 2)
+                R_beta = self.lambda_beta * W_beta + 1e-10 * np.eye(d_phi)
+                self.P_beta = np.linalg.inv(R_beta)
+            else:
+                # Standard RLS initialization (uniform regularization)
+                self.P_beta = (1.0 / self.lambda_beta) * np.eye(d_phi)
+            
             self._mu_phi = np.zeros(d_phi)
             self._sigma_phi = np.ones(d_phi)
+            
         if self.alpha is None:
             d_psi = psi.size
             self.alpha = np.zeros(d_psi)
-            self.P_alpha = (1.0 / self.lambda_alpha) * np.eye(d_psi)
+            
+            # Initialize P_alpha with per-basis weighted ridge if use_ridge=True
+            if self.use_ridge:
+                w_alpha = self._build_ridge_weights_auto(d_psi, 'ma')
+                W_alpha = np.diag(w_alpha ** 2)
+                R_alpha = self.lambda_alpha * W_alpha + 1e-10 * np.eye(d_psi)
+                self.P_alpha = np.linalg.inv(R_alpha)
+            else:
+                # Standard RLS initialization (uniform regularization)
+                self.P_alpha = (1.0 / self.lambda_alpha) * np.eye(d_psi)
+            
             self._mu_psi = np.zeros(d_psi)
             self._sigma_psi = np.ones(d_psi)
         return phi, psi
