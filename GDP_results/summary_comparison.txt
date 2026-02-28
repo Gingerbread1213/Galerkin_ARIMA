@@ -1,0 +1,6 @@
+Overall Performance (averaged across all datasets and parameter combinations):
+======================================================================
+         Alg      MAE     RMSE  combo_sec
+       ARIMA 0.722932 1.689891   0.908861
+GARIMA-Ridge 0.795127 2.506531   0.117384
+  GARIMA-OLS 1.402231 5.326963   0.080933
