@@ -1,0 +1,13 @@
+Forecast Accuracy:
+                 MAE    RMSE      MAPE    sMAPE
+Alg                                            
+ARIMA         0.7377  1.8186  223.6699  49.9575
+GARIMA-OLS    1.2223  4.6379  257.6029  53.7063
+GARIMA-Ridge  0.6855  1.3911  217.0717  49.8839
+
+PI Quality:
+              PI_Coverage_%  Mean_PI_Width
+Alg                                       
+ARIMA                 86.67           3.66
+GARIMA-OLS            90.83           2.92
+GARIMA-Ridge          91.67           3.00

@@ -1,6 +1,0 @@
-Computational Efficiency (averaged across all runs and parameter combinations):
-======================================================================
-         Alg  mean_iter_ms  combo_sec  throughput_iters_per_sec
-  GARIMA-OLS      0.762687   0.091543               1482.434261
-GARIMA-Ridge      1.875379   0.225077                871.374644
-       ARIMA   1798.400041 215.808065                 12.687987
